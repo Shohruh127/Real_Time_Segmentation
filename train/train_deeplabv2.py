@@ -8,6 +8,10 @@ import time
 from tqdm import tqdm # For progress bars
 import numpy as np # Keep for potential future use
 
+from datasets.cityscapes import CityScapes 
+from models.deeplabv2.deeplabv2 import get_deeplab_v2
+from utils.lr_scheduler import adjust_learning_rate 
+
 # --- Configuration ---
 CITYSCAPES_ROOT = "/content/drive/MyDrive/datasets/Cityscapes/Cityspaces/" # Adjust if needed
 PRETRAINED_WEIGHTS_PATH = "/content/drive/MyDrive/deeplab_resnet_pretrained_imagenet.pth" # Your path
