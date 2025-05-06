@@ -13,7 +13,7 @@ from models.deeplabv2.deeplabv2 import get_deeplab_v2
 from utils.lr_scheduler import adjust_learning_rate 
 
 # --- Configuration ---
-CITYSCAPES_ROOT = "/content/drive/MyDrive/datasets/Cityscapes/Cityspaces/" # Adjust if needed
+CITYSCAPES_ROOT = "/content/drive/MyDrive/datasets/Cityscapes/Cityscapes/" # Adjust if needed
 PRETRAINED_WEIGHTS_PATH = "/content/drive/MyDrive/deeplab_resnet_pretrained_imagenet.pth" # Your path
 CHECKPOINT_DIR = "./checkpoints_deeplabv2" # Directory to save model checkpoints
 RUN_NAME = "deeplabv2_run1" # Name for this specific training run's checkpoints
