@@ -75,7 +75,7 @@ class CityScapes(Dataset):
             raise FileNotFoundError(f"Image directory not found: {img_dir}")
         # Removed label dir check here, handle missing labels in loop
 
-        search_pattern_img = os.path.join(img_dir, '*', f'*_{self.image_dir_name}.png') # Adapt pattern
+        search_pattern_img = os.path.join(img_dir, '*', '*_leftImg8bit.png') # Adapt pattern
         found_files = glob(search_pattern_img)
         found_files.sort()
 
