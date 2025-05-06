@@ -4,6 +4,7 @@ import torch
 import numpy as np
 from PIL import Image
 from glob import glob  # Import the glob function
+import time # Added for debugging delay if needed later
 from torch.utils.data import Dataset
 import torchvision.transforms.v2 as T 
 
@@ -41,52 +42,84 @@ class CityScapes(Dataset):
         self.files = []
         self.labels = []
         self.transform = create_transforms(split=transform_mode, target_size=self.target_size)
-        self._set_files() 
+        self._set_files() # Call helper function to populate files
 
     def _set_files(self):
         img_dir = os.path.join(self.root_dir, self.image_dir_name, self.split)
         lbl_dir = os.path.join(self.root_dir, self.label_dir_name, self.split) 
 
+        print(f"\n[DEBUG _set_files] Using root_dir: {self.root_dir}") # DEBUG
+        print(f"[DEBUG _set_files] Checking img_dir: {img_dir}") # DEBUG
+        
         if not os.path.isdir(img_dir):
-            raise FileNotFoundError(f"Image directory not found: {img_dir}")
+            print(f"[DEBUG _set_files] ERROR: img_dir does NOT exist or is not a directory!") # DEBUG
+            return 
+
+        print(f"[DEBUG _set_files] img_dir confirmed to exist.") # DEBUG
 
         search_pattern_img = os.path.join(img_dir, '*', '*_leftImg8bit.png') 
+        print(f"[DEBUG _set_files] Using glob pattern: {search_pattern_img}") # DEBUG
         
-        # --- CORRECTED GLOB CALL ---
-        found_files = glob(search_pattern_img) # Use the imported function directly
-        # --- END CORRECTION ---
+        found_files = [] 
+        try:
+            # Use corrected glob call
+            found_files = glob(search_pattern_img) 
+            print(f"[DEBUG _set_files] glob.glob returned {len(found_files)} files.") # DEBUG
+        except Exception as e:
+             print(f"[DEBUG _set_files] ERROR during glob.glob execution: {e}") # DEBUG
         
-        print(f"Glob search found {len(found_files)} files initially for pattern: {search_pattern_img}") # Keep check
-
         found_files.sort()
 
         if not found_files:
-             print(f"Warning: No image files found matching pattern: {search_pattern_img}")
-             # No need to return here, loop won't run
+             print(f"[DEBUG _set_files] WARNING: found_files list is empty after glob search.") # DEBUG
 
-        for img_path in found_files: 
+        # --- Loop to find image/label pairs with DEBUG prints ---
+        files_added_count = 0
+        labels_added_count = 0
+        print_debug_limit = 5  # Print debug info for the first 5 images found
+        debug_prints_done = 0
+
+        for img_path in found_files: # Loop should run if glob found files
             base_name = os.path.basename(img_path)
             city = os.path.basename(os.path.dirname(img_path))
             
             lbl_name_base = base_name.replace('_leftImg8bit.png', '') 
-            lbl_name = f"{lbl_name_base}_labelIds.png"
-            lbl_path = os.path.join(lbl_dir, city, lbl_name)
+            # Construct the expected label path using the main label directory lbl_dir
+            # Ensure it looks for '_gtFine_labelIds.png'
+            lbl_name = f"{lbl_name_base}_{self.label_dir_name}_labelIds.png" 
+            lbl_path = os.path.join(lbl_dir, city, lbl_name) 
 
-            if os.path.exists(lbl_path):
+            label_exists = os.path.exists(lbl_path) # Check if the specific label file exists
+
+            # Print debug info for the first few iterations
+            if debug_prints_done < print_debug_limit:
+                print(f"\n[DEBUG Loop] Checking Image: {img_path}")
+                print(f"[DEBUG Loop] Expecting Label: {lbl_path}")
+                print(f"[DEBUG Loop] Label Exists? {label_exists}")
+                debug_prints_done += 1
+
+            # Append if label exists (for train/val) or if split is test
+            if label_exists:
                 self.files.append(img_path)
                 self.labels.append(lbl_path)
+                files_added_count += 1
+                labels_added_count += 1
             elif self.split == 'test':
                  self.files.append(img_path)
                  self.labels.append(None)
-
-        # Final summary print
+                 files_added_count += 1
+            # else: If train/val and label doesn't exist, skip this image file
+        
+        # Final summary print from within the method
+        print(f"[DEBUG _set_files] FINAL Counts within _set_files: Images added={files_added_count}, Labels added={labels_added_count}") # DEBUG
+        # Original print statement (will show 0 if self.files wasn't populated)
         print(f"Found {len(self.files)} images and {len([l for l in self.labels if l is not None])} labels in split '{self.split}'") 
 
     def __len__(self):
         return len(self.files)
 
     def __getitem__(self, idx):
-        # --- Keep the __getitem__ implementation from Turn 48 ---
+        # --- Keep the __getitem__ implementation from Turn 48/50 ---
         img_path = self.files[idx]
         lbl_path = self.labels[idx]
 
@@ -96,7 +129,14 @@ class CityScapes(Dataset):
             label_pil = None 
             label_remapped_np = None
         else:
-            label_pil = Image.open(lbl_path) 
+            try:
+                label_pil = Image.open(lbl_path) 
+            except Exception as e:
+                 print(f"ERROR opening label file {lbl_path}: {e}")
+                 # Handle error: maybe return dummy data or raise exception
+                 dummy_label = torch.full((self.target_size[0], self.target_size[1]), self.ignore_index, dtype=torch.long)
+                 return self.transform(image_pil), dummy_label # Return transformed image and dummy label
+
             label_np = np.array(label_pil, dtype=np.uint8)
             label_remapped_np = np.full(label_np.shape, self.ignore_index, dtype=np.uint8) 
             for k, v in self.id_to_trainid.items():
