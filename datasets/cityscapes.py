@@ -69,7 +69,7 @@ class CityScapes(Dataset):
             city = os.path.basename(os.path.dirname(img_path))
             
             lbl_name_base = base_name.replace('_leftImg8bit.png', '') 
-            lbl_name = f"{lbl_name_base}_{self.label_dir_name}_labelIds.png" 
+            lbl_name = f"{lbl_name_base}_labelIds.png"
             lbl_path = os.path.join(lbl_dir, city, lbl_name)
 
             if os.path.exists(lbl_path):
