@@ -151,20 +151,30 @@ class ResNetMulti(nn.Module):
                     jj += 1
                     if k.requires_grad:
                         yield k
+    # Inside the ResNetMulti class in models/deeplabv2/deeplabv2.py
 
     def get_10x_lr_params(self):
         """
-        This generator returns all the parameters for the last layer of the net,
-        which does the classification of pixel into classes
+        This generator returns all the parameters for the last layer (ASPP module),
+        which does the classification of pixels into classes.
         """
-        b = []
-        if self.multi_level:
-            b.append(self.layer5.parameters())
-        b.append(self.layer6.parameters())
+        # The parameters for the 10x learning rate should just be from layer6 (ASPP)
+        for param in self.layer6.parameters():
+             yield param
 
-        for j in range(len(b)):
-            for i in b[j]:
-                yield i
+    # def get_10x_lr_params(self):
+    #     """
+    #     This generator returns all the parameters for the last layer of the net,
+    #     which does the classification of pixel into classes
+    #     """
+    #     b = []
+    #     if self.multi_level:
+    #         b.append(self.layer5.parameters())
+    #     b.append(self.layer6.parameters())
+
+    #     for j in range(len(b)):
+    #         for i in b[j]:
+    #             yield i
 
     def optim_parameters(self, lr):
         return [{'params': self.get_1x_lr_params_no_scale(), 'lr': lr},
