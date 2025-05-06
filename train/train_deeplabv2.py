@@ -1,3 +1,4 @@
+# train/train_deeplabv2.py
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -7,9 +8,11 @@ import time
 from tqdm import tqdm # For progress bars
 import numpy as np # Keep for potential future use
 
-# Import project components
-from datasets.cityscapes import CityScapes # Make sure this path is correct
-from models.deeplabv2.deeplabv2 import get_deeplab_v2
+# Import project components using RELATIVE paths
+# Use '..' to go up one directory level from 'train/'
+from ..datasets.cityscapes import CityScapes # CORRECTED IMPORT
+from ..models.deeplabv2.deeplabv2 import get_deeplab_v2 # CORRECTED IMPORT
+from ..utils.lr_scheduler import adjust_learning_rate # Assuming lr_poly and adjust_learning_rate are moved here
 
 # --- Configuration ---
 CITYSCAPES_ROOT = "/content/drive/MyDrive/datasets/Cityscapes/Cityspaces/" # Adjust if needed
@@ -45,17 +48,6 @@ def save_checkpoint(model, optimizer, epoch, filename="checkpoint.pth.tar"):
     torch.save(state, filename)
     # print(f"Checkpoint saved to {filename}") # Optional print
 
-# --- Poly Learning Rate Scheduler ---
-def lr_poly(base_lr, iter, max_iter, power):
-    return base_lr * ((1 - float(iter) / max_iter) ** power)
-
-def adjust_learning_rate(optimizer, i_iter, max_iter, base_lr_rate):
-    """Adjusts learning rate based on poly policy."""
-    lr = lr_poly(base_lr_rate, i_iter, max_iter, 0.9)
-    optimizer.param_groups[0]['lr'] = lr # For backbone (1x LR)
-    if len(optimizer.param_groups) > 1:
-        optimizer.param_groups[1]['lr'] = lr * 10 # For classifier (10x LR)
-
 # --- Main Training Function ---
 def main():
     print(f"Using device: {DEVICE}")
@@ -63,6 +55,11 @@ def main():
     run_checkpoint_dir = os.path.join(CHECKPOINT_DIR, RUN_NAME)
     os.makedirs(run_checkpoint_dir, exist_ok=True)
     print(f"Checkpoints will be saved in: {run_checkpoint_dir}")
+
+    # Optional: Check if dataset directory exists
+    if not os.path.isdir(CITYSCAPES_ROOT):
+         print(f"ERROR: Cityscapes root directory not found at {CITYSCAPES_ROOT}")
+         return
 
     # 1. Dataset and DataLoader (Training Only)
     print("Loading training dataset...")
@@ -84,7 +81,7 @@ def main():
 
     # 4. Optimizer
     optimizer = optim.SGD(model.optim_parameters(LEARNING_RATE),
-                          lr=LEARNING_RATE,
+                          lr=LEARNING_RATE, # Base LR is set here but adjusted by scheduler
                           momentum=MOMENTUM,
                           weight_decay=WEIGHT_DECAY)
 
@@ -106,7 +103,7 @@ def main():
             images = images.to(DEVICE, non_blocking=True)
             labels = labels.to(DEVICE, non_blocking=True) 
 
-            # Adjust learning rate
+            # Adjust learning rate (using imported function)
             adjust_learning_rate(optimizer, current_iteration, max_iterations, LEARNING_RATE)
 
             # Forward pass
@@ -130,11 +127,10 @@ def main():
         print(f"\nEpoch {epoch+1}/{NUM_EPOCHS} Completed. Average Training Loss: {avg_epoch_loss:.4f}")
 
         # Save latest checkpoint after each epoch
-        save_checkpoint(model, optimizer, epoch,
-                        filename=os.path.join(run_checkpoint_dir, f"deeplabv2_epoch_{epoch+1}.pth.tar"))
-        # Also save a single 'latest' checkpoint for easy resuming/validation
-        save_checkpoint(model, optimizer, epoch,
-                        filename=os.path.join(run_checkpoint_dir, f"deeplabv2_latest.pth.tar"))
+        epoch_filename = os.path.join(run_checkpoint_dir, f"deeplabv2_epoch_{epoch+1}.pth.tar")
+        latest_filename = os.path.join(run_checkpoint_dir, f"deeplabv2_latest.pth.tar")
+        save_checkpoint(model, optimizer, epoch, filename=epoch_filename)
+        save_checkpoint(model, optimizer, epoch, filename=latest_filename) # Overwrite latest
 
 
     # --- End of Training ---
@@ -144,4 +140,5 @@ def main():
 
 # --- Script Entry Point ---
 if __name__ == "__main__":
+    # Add imports needed only here, if any
     main()
