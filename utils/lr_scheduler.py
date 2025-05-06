@@ -1,34 +1,18 @@
-import numpy as np
+# utils/lr_scheduler.py
+# Contains the poly learning rate calculation and the function to adjust optimizer groups
 
+def lr_poly(base_lr, iter, max_iter, power=0.9):
+    """Calculates the new learning rate based on polynomial decay."""
+    return base_lr * ((1 - float(iter) / max_iter) ** power)
 
-def poly_lr_scheduler(optimizer, init_lr, iter, lr_decay_iter=1,
-                      max_iter=300, power=0.9):
-    """Polynomial decay of learning rate
-            :param init_lr is base learning rate
-            :param iter is a current iteration
-            :param lr_decay_iter how frequently decay occurs, default is 1
-            :param max_iter is number of maximum iterations
-            :param power is a polymomial power
+def adjust_learning_rate(optimizer, i_iter, max_iter, base_lr_rate):
+    """Adjusts learning rate based on poly policy FOR ALL parameter groups."""
+    lr = lr_poly(base_lr_rate, i_iter, max_iter)
 
-    """
-    # if iter % lr_decay_iter or iter > max_iter:
-    # 	return optimizer
+    # Assuming first group is backbone (1x LR) and second is classifier (10x LR)
+    optimizer.param_groups[0]['lr'] = lr 
+    if len(optimizer.param_groups) > 1:
+        optimizer.param_groups[1]['lr'] = lr * 10 # Apply 10x LR to the second group
 
-    lr = init_lr*(1 - iter/max_iter)**power
-    optimizer.param_groups[0]['lr'] = lr
+    # Return the base calculated LR for logging purposes if needed
     return lr
-    # return lr
-
-
-def fast_hist(a, b, n):
-    '''
-    a and b are label and prediction respectively
-    n is the number of classes
-    '''
-    k = (a >= 0) & (a < n)
-    return np.bincount(n * a[k].astype(int) + b[k], minlength=n ** 2).reshape(n, n)
-
-
-def per_class_iou(hist):
-    epsilon = 1e-5
-    return (np.diag(hist)) / (hist.sum(1) + hist.sum(0) - np.diag(hist) + epsilon)
