@@ -4,7 +4,6 @@ import torch
 import numpy as np
 from PIL import Image
 from glob import glob  # Import the glob function
-import time # Added for debugging delay if needed later
 from torch.utils.data import Dataset
 import torchvision.transforms.v2 as T 
 
@@ -24,13 +23,16 @@ def create_transforms(split='train', target_size=(512, 1024)):
 
 class CityScapes(Dataset):
     ignore_index = 255
-    id_to_trainid = {
-        0: ignore_index, 1: ignore_index, 2: ignore_index, 3: ignore_index, 4: ignore_index, 5: ignore_index, 
-        6: ignore_index, 7: 0, 8: 1, 9: ignore_index, 10: ignore_index, 11: 2, 12: 3, 13: 4, 
-        14: ignore_index, 15: ignore_index, 16: ignore_index, 17: 5, 18: ignore_index, 19: 6, 20: 7, 
-        21: 8, 22: 9, 23: 10, 24: 11, 25: 12, 26: 13, 27: 14, 28: 15, 29: ignore_index, 
-        30: ignore_index, 31: 16, 32: 17, 33: 18, -1: ignore_index
-    }
+    # This mapping converts Cityscapes label IDs (0-33) found in _labelIds.png
+    # files into the train IDs (0-18) + ignore index (255).
+    # The _labelTrainIds.png files might *already* contain these train IDs.
+    # We should load a _labelTrainIds.png file to check its values.
+    # If they are already 0-18 and 255, we don't need the id_to_trainid mapping.
+    # Let's assume for now the _labelTrainIds.png *does* contain the target train IDs (0-18, 255)
+    # If it contains the original 0-33 IDs, we would need the mapping again.
+    # For now, REMOVING the mapping and assuming the file contains TrainIDs.
+    # id_to_trainid = { ... } # Keep this commented out for now
+
     target_size = (512, 1024) 
 
     def __init__(self, root_dir, split='train', transform_mode='train'):
@@ -42,63 +44,45 @@ class CityScapes(Dataset):
         self.files = []
         self.labels = []
         self.transform = create_transforms(split=transform_mode, target_size=self.target_size)
-        self._set_files() # Call helper function to populate files
+        print(f"Initializing CityScapes dataset for split '{split}'...")
+        self._set_files() 
 
     def _set_files(self):
         img_dir = os.path.join(self.root_dir, self.image_dir_name, self.split)
         lbl_dir = os.path.join(self.root_dir, self.label_dir_name, self.split) 
 
-        print(f"\n[DEBUG _set_files] Using root_dir: {self.root_dir}") # DEBUG
-        print(f"[DEBUG _set_files] Checking img_dir: {img_dir}") # DEBUG
-        
         if not os.path.isdir(img_dir):
-            print(f"[DEBUG _set_files] ERROR: img_dir does NOT exist or is not a directory!") # DEBUG
-            return 
-
-        print(f"[DEBUG _set_files] img_dir confirmed to exist.") # DEBUG
+            raise FileNotFoundError(f"Image directory not found: {img_dir}")
 
         search_pattern_img = os.path.join(img_dir, '*', '*_leftImg8bit.png') 
-        print(f"[DEBUG _set_files] Using glob pattern: {search_pattern_img}") # DEBUG
         
-        found_files = [] 
         try:
-            # Use corrected glob call
-            found_files = glob(search_pattern_img) 
-            print(f"[DEBUG _set_files] glob.glob returned {len(found_files)} files.") # DEBUG
+            found_files = glob(search_pattern_img) # Use the imported function directly
         except Exception as e:
-             print(f"[DEBUG _set_files] ERROR during glob.glob execution: {e}") # DEBUG
+             print(f"ERROR during glob execution: {e}")
+             found_files = []
         
+        print(f"Glob search found {len(found_files)} image files initially for pattern: {search_pattern_img}")
+
         found_files.sort()
 
         if not found_files:
-             print(f"[DEBUG _set_files] WARNING: found_files list is empty after glob search.") # DEBUG
+             print(f"Warning: No image files found matching pattern: {search_pattern_img}")
 
-        # --- Loop to find image/label pairs with DEBUG prints ---
         files_added_count = 0
         labels_added_count = 0
-        print_debug_limit = 5  # Print debug info for the first 5 images found
-        debug_prints_done = 0
-
-        for img_path in found_files: # Loop should run if glob found files
+        for img_path in found_files: 
             base_name = os.path.basename(img_path)
             city = os.path.basename(os.path.dirname(img_path))
             
             lbl_name_base = base_name.replace('_leftImg8bit.png', '') 
-            # Construct the expected label path using the main label directory lbl_dir
-            # Ensure it looks for '_gtFine_labelIds.png'
-            lbl_name = f"{lbl_name_base}_{self.label_dir_name}_labelIds.png" 
+            # --- CORRECTED LABEL FILENAME SUFFIX ---
+            lbl_name = f"{lbl_name_base}_{self.label_dir_name}_labelTrainIds.png" 
+            # --- END CORRECTION ---
             lbl_path = os.path.join(lbl_dir, city, lbl_name) 
 
-            label_exists = os.path.exists(lbl_path) # Check if the specific label file exists
+            label_exists = os.path.exists(lbl_path) 
 
-            # Print debug info for the first few iterations
-            if debug_prints_done < print_debug_limit:
-                print(f"\n[DEBUG Loop] Checking Image: {img_path}")
-                print(f"[DEBUG Loop] Expecting Label: {lbl_path}")
-                print(f"[DEBUG Loop] Label Exists? {label_exists}")
-                debug_prints_done += 1
-
-            # Append if label exists (for train/val) or if split is test
             if label_exists:
                 self.files.append(img_path)
                 self.labels.append(lbl_path)
@@ -108,48 +92,58 @@ class CityScapes(Dataset):
                  self.files.append(img_path)
                  self.labels.append(None)
                  files_added_count += 1
-            # else: If train/val and label doesn't exist, skip this image file
-        
-        # Final summary print from within the method
-        print(f"[DEBUG _set_files] FINAL Counts within _set_files: Images added={files_added_count}, Labels added={labels_added_count}") # DEBUG
-        # Original print statement (will show 0 if self.files wasn't populated)
+            # else: # Optional: Warn if label missing for train/val
+            #    print(f"Warning: Label file not found for {img_path} at {lbl_path}")
+
+
         print(f"Found {len(self.files)} images and {len([l for l in self.labels if l is not None])} labels in split '{self.split}'") 
+        if len(self.files) == 0 and self.split != 'test':
+             print(f"\nERROR: No image/label pairs found for split '{self.split}'.")
+             print(f"Please check that label files ending in '_gtFine_labelTrainIds.png' exist in the corresponding gtFine directories.")
+             print(f"Searched in: {lbl_dir}/<city>/")
+
 
     def __len__(self):
+        # Raise error if length is 0 for train/val splits after init to prevent DataLoader error
+        if len(self.files) == 0 and self.split != 'test':
+            # This error occurs after the print messages in _set_files if nothing was found
+            raise RuntimeError("Dataset initialization failed: No valid image/label pairs found.")
         return len(self.files)
 
     def __getitem__(self, idx):
-        # --- Keep the __getitem__ implementation from Turn 48/50 ---
         img_path = self.files[idx]
         lbl_path = self.labels[idx]
 
         image_pil = Image.open(img_path).convert('RGB')
         
-        if lbl_path is None:
-            label_pil = None 
-            label_remapped_np = None
+        if lbl_path is None: # Handle test set case
+            label_tensor = None # Will be handled later if needed, maybe return dummy
         else:
             try:
+                # Load the labelTrainIds file directly
                 label_pil = Image.open(lbl_path) 
             except Exception as e:
-                 print(f"ERROR opening label file {lbl_path}: {e}")
-                 # Handle error: maybe return dummy data or raise exception
+                 print(f"ERROR opening or processing label file {lbl_path}: {e}")
+                 # Return dummy data to avoid crashing DataLoader
                  dummy_label = torch.full((self.target_size[0], self.target_size[1]), self.ignore_index, dtype=torch.long)
-                 return self.transform(image_pil), dummy_label # Return transformed image and dummy label
+                 return self.transform(image_pil), dummy_label
 
-            label_np = np.array(label_pil, dtype=np.uint8)
-            label_remapped_np = np.full(label_np.shape, self.ignore_index, dtype=np.uint8) 
-            for k, v in self.id_to_trainid.items():
-                 mask = (label_np == k)
-                 label_remapped_np[mask] = v
+            # --- Assumption: _labelTrainIds.png already contains train IDs (0-18, 255) ---
+            # If this assumption is wrong, you need to load the label, inspect its values,
+            # and potentially re-apply the id_to_trainid mapping.
+            # For now, assume it's correct and just resize and convert.
             
-            label_pil_remapped = Image.fromarray(label_remapped_np)
-            label_pil_resized = label_pil_remapped.resize((self.target_size[1], self.target_size[0]), Image.NEAREST) 
-            label_tensor = torch.from_numpy(np.array(label_pil_resized)).long() 
+            # Resize Label using NEAREST
+            label_pil_resized = label_pil.resize((self.target_size[1], self.target_size[0]), Image.NEAREST) 
+            label_tensor = torch.from_numpy(np.array(label_pil_resized)).long() # Convert to LongTensor HxW
+            # Ensure ignore_index values are preserved if they were not 255 in the file
+            # label_tensor[label_tensor == original_ignore_value] = self.ignore_index # If needed
 
+        # Apply transforms to the image
         image_tensor = self.transform(image_pil) 
         
-        if label_pil is None:
+        # Handle None label for test set if necessary (e.g., return dummy)
+        if label_tensor is None:
              dummy_label = torch.full((self.target_size[0], self.target_size[1]), self.ignore_index, dtype=torch.long)
              return image_tensor, dummy_label
 
