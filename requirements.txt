@@ -1,0 +1,24 @@
+# requirements.txt
+
+# Core Deep Learning Framework
+torch
+torchvision
+
+# Numerical Operations & Data Handling
+numpy
+
+# Image Loading/Processing
+Pillow # Used by torchvision and our dataset loaders for Image.open()
+
+# Progress Bars
+tqdm
+
+# FLOPs/Parameter Calculation (as per README)
+fvcore
+
+# Optional but recommended for config files (if using YAML)
+# pyyaml 
+
+# Optional for visualization (if you plot results/masks)
+# matplotlib
+# opencv-python
