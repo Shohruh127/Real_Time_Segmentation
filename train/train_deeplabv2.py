@@ -25,7 +25,7 @@ INPUT_SIZE = (512, 1024) # H, W
 
 # Training Hyperparameters
 NUM_EPOCHS = 50 # As per project spec
-BATCH_SIZE = 4 # Adjust based on your GPU memory
+BATCH_SIZE = 2 # Adjust based on your GPU memory
 LEARNING_RATE = 1e-3 # Initial LR for backbone
 MOMENTUM = 0.9
 WEIGHT_DECAY = 5e-4
