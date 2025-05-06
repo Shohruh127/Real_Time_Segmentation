@@ -62,7 +62,7 @@ def main():
     # 1. Dataset and DataLoader (Training Only)
     print("Loading training dataset...")
     train_dataset = CityScapes(root_dir=CITYSCAPES_ROOT, split='train', transform_mode='train')
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, pin_memory=True, drop_last=True)
+    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=2, pin_memory=True, drop_last=True)
     print("Training dataset loaded.")
 
     # 2. Model
