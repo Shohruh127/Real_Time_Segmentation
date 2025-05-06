@@ -8,11 +8,6 @@ import numpy as np
 from tqdm import tqdm 
 from fvcore.nn import FlopCountAnalysis, flop_count_table # For FLOPs/Params
 
-# Import project components using RELATIVE paths
-from ..datasets.cityscapes import CityScapes 
-from ..models.deeplabv2.deeplabv2 import get_deeplab_v2
-from ..utils.metrics import ConfusionMatrix # Import the metrics utility
-
 # --- Configuration ---
 CITYSCAPES_ROOT = "/content/drive/MyDrive/datasets/Cityscapes/Cityspaces/" # Adjust if needed
 # --- IMPORTANT: Specify which checkpoint to load for validation ---
