@@ -13,38 +13,39 @@ from collections import OrderedDict
 # Import project components
 from datasets.cityscapes import CityScapes 
 from models.bisenet.build_bisenet import BiSeNet # Import BiSeNet
-from utils.lr_scheduler import adjust_learning_rate # Using the same poly scheduler
+from utils.lr_scheduler import lr_poly # Only need lr_poly if adjust_learning_rate is handled here
 
 # --- Default Configurations ---
 DEFAULT_CITYSCAPES_ROOT = "/content/drive/MyDrive/datasets/Cityscapes/Cityscapes/" 
-DEFAULT_CHECKPOINT_DIR = "./checkpoints_bisenet" # Different checkpoint dir
+DEFAULT_CHECKPOINT_DIR = "./checkpoints_bisenet" 
 DEFAULT_RUN_NAME = "bisenet_resnet18_city_run1" 
 DEFAULT_NUM_CLASSES = 19
 DEFAULT_IGNORE_INDEX = 255
 DEFAULT_INPUT_SIZE = (512, 1024) # H, W
 DEFAULT_NUM_EPOCHS = 50 
-DEFAULT_BATCH_SIZE = 8 # BiSeNet ResNet18 is lighter, can try larger BS
+DEFAULT_BATCH_SIZE = 8 # BiSeNet ResNet18 is lighter, trying BS=8
 DEFAULT_LEARNING_RATE = 2.5e-2 # From BiSeNet paper for Cityscapes
 DEFAULT_MOMENTUM = 0.9
-DEFAULT_WEIGHT_DECAY = 1e-4 # BiSeNet paper uses this
+DEFAULT_WEIGHT_DECAY = 1e-4 # From BiSeNet paper
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 PRINT_FREQ = 100 
+# Weight for auxiliary losses (BiSeNet paper suggests alpha=1 for each)
+AUX_LOSS_WEIGHT = 1.0 
 
 # --- Argument Parser ---
 def parse_args():
-    parser = argparse.ArgumentParser(description="BiSeNet Training on Cityscapes")
+    parser = argparse.ArgumentParser(description="BiSeNet (ResNet-18) Training on Cityscapes")
     parser.add_argument('--resume', type=str, default=None,
                         help='Path to the checkpoint to resume from')
     parser.add_argument('--batch_size', type=int, default=DEFAULT_BATCH_SIZE, 
                         help='Training batch size')
     parser.add_argument('--lr', type=float, default=DEFAULT_LEARNING_RATE, 
-                        help='Initial learning rate')
+                        help='Initial learning rate for backbone')
     parser.add_argument('--epochs', type=int, default=DEFAULT_NUM_EPOCHS, 
                         help='Total number of epochs to train')
     parser.add_argument('--data_root', type=str, default=DEFAULT_CITYSCAPES_ROOT, 
                         help='Path to Cityscapes root directory')
-    # BiSeNet loads backbone weights internally, no separate global pretrain path needed here
     parser.add_argument('--checkpoint_dir', type=str, default=DEFAULT_CHECKPOINT_DIR, 
                         help='Directory to save checkpoints')
     parser.add_argument('--run_name', type=str, default=DEFAULT_RUN_NAME, 
@@ -54,7 +55,6 @@ def parse_args():
 
 # --- Helper Function ---
 def save_checkpoint(model, optimizer, epoch, run_ckpt_dir, filename="checkpoint.pth.tar"):
-    # (Same as in train_deeplabv2.py)
     state = {
         'epoch': epoch + 1, 
         'state_dict': model.state_dict(),
@@ -63,6 +63,17 @@ def save_checkpoint(model, optimizer, epoch, run_ckpt_dir, filename="checkpoint.
     filepath = os.path.join(run_ckpt_dir, filename)
     os.makedirs(run_ckpt_dir, exist_ok=True)
     torch.save(state, filepath)
+
+# --- Custom LR Adjustment for BiSeNet (if BiSeNet.optim_parameters provides groups) ---
+def adjust_bisenet_learning_rate(optimizer, i_iter, max_iter, base_lr_group0, base_lr_group1):
+    """Adjusts learning rate for BiSeNet based on poly policy for two groups."""
+    lr_group0 = lr_poly(base_lr_group0, i_iter, max_iter)
+    lr_group1 = lr_poly(base_lr_group1, i_iter, max_iter)
+    
+    optimizer.param_groups[0]['lr'] = lr_group0 
+    if len(optimizer.param_groups) > 1:
+        optimizer.param_groups[1]['lr'] = lr_group1
+
 
 # --- Main Training Function ---
 def main(args): 
@@ -91,18 +102,18 @@ def main(args):
     max_iterations = args.epochs * len(train_loader) 
 
     print("Initializing BiSeNet model (ResNet-18 backbone)...")
-    # Instantiate BiSeNet with ResNet-18 backbone
-    # The build_contextpath in BiSeNet's init handles pre-trained ResNet-18
+    # Instantiate BiSeNet with ResNet-18 backbone.
+    # Pre-trained ResNet-18 weights are loaded by build_contextpath called within BiSeNet's __init__
     model = BiSeNet(num_classes=DEFAULT_NUM_CLASSES, context_path='resnet18')
     model.to(DEVICE)
     print("Model initialized.")
 
-    # Loss Function for main output and auxiliary outputs
     criterion = nn.CrossEntropyLoss(ignore_index=DEFAULT_IGNORE_INDEX).to(DEVICE)
 
-    # Optimizer - using the model.optim_parameters() method
+    # Optimizer setup using the optim_parameters method from BiSeNet
+    # This assumes model.optim_parameters(args.lr) returns groups with 'lr' pre-set
     optimizer = optim.SGD(model.optim_parameters(args.lr), 
-                          # lr is set per group by optim_parameters
+                          # lr is managed per group by optim_parameters
                           momentum=DEFAULT_MOMENTUM,
                           weight_decay=DEFAULT_WEIGHT_DECAY)
 
@@ -150,15 +161,13 @@ def main(args):
             images = images.to(DEVICE, non_blocking=True)
             labels = labels.to(DEVICE, non_blocking=True) 
 
-            # Learning rate adjustment
-            # Use the base LR for the backbone (group 0) from args.lr
-            # The adjust_learning_rate function will use this base for group 0
-            # and then multiply for other groups if optimizer is set up that way.
-            # Our BiSeNet.optim_parameters already sets the 10x LR for the second group.
-            current_base_lr = lr_poly(args.lr, current_iteration, max_iterations) # Calculate base LR for this iteration
-            optimizer.param_groups[0]['lr'] = current_base_lr
+            # Adjust learning rate using poly policy for each group
+            # The model.optim_parameters method already set the initial base_lr * 10 for the second group.
+            # So, we calculate the decayed base_lr and apply it, and apply the decayed 10*base_lr to the second group.
+            current_base_lr_val = lr_poly(args.lr, current_iteration, max_iterations)
+            optimizer.param_groups[0]['lr'] = current_base_lr_val
             if len(optimizer.param_groups) > 1:
-                optimizer.param_groups[1]['lr'] = current_base_lr * 10.0
+                optimizer.param_groups[1]['lr'] = current_base_lr_val * 10.0
 
 
             # Forward pass - BiSeNet returns 3 outputs in training mode
@@ -168,8 +177,8 @@ def main(args):
             loss_aux1 = criterion(aux_out1, labels)
             loss_aux2 = criterion(aux_out2, labels)
             
-            # Total loss (BiSeNet paper uses alpha=1 for auxiliary losses)
-            total_loss = loss_main + loss_aux1 + loss_aux2 
+            # Total loss (BiSeNet paper states alpha=1 for auxiliary losses)
+            total_loss = loss_main + AUX_LOSS_WEIGHT * (loss_aux1 + loss_aux2)
 
             optimizer.zero_grad()
             total_loss.backward()
@@ -196,7 +205,4 @@ def main(args):
 # --- Script Entry Point ---
 if __name__ == "__main__":
     cmd_args = parse_args() 
-    # Update global defaults with cmd_args before calling main for cleaner access, 
-    # or pass cmd_args dict and use args.value everywhere in main.
-    # For simplicity here, main will directly use cmd_args.
     main(cmd_args)
