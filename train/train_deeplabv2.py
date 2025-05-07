@@ -11,7 +11,7 @@ import argparse
 from collections import OrderedDict 
 
 # --- Default Configurations (Module Level) ---
-DEFAULT_CITYSCAPES_ROOT = "/content/drive/MyDrive/datasets/Cityscapes/Cityspaces/" 
+DEFAULT_CITYSCAPES_ROOT = "/content/drive/MyDrive/datasets/Cityscapes/Cityscapes/" 
 DEFAULT_PRETRAINED_WEIGHTS_PATH = "/content/drive/MyDrive/deeplab_resnet_pretrained_imagenet.pth" 
 DEFAULT_CHECKPOINT_DIR = "./checkpoints_deeplabv2" 
 DEFAULT_RUN_NAME = "deeplabv2_run1" 
