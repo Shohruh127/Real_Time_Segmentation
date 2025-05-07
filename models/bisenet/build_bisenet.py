@@ -85,7 +85,7 @@ class BiSeNet(torch.nn.Module):
     def __init__(self, num_classes, context_path):
         super().__init__()
         # build spatial path
-        self.saptial_path = Spatial_path()
+        self.spatial_path = Spatial_path()
 
         # build context path
         self.context_path = build_contextpath(name=context_path)
@@ -126,6 +126,30 @@ class BiSeNet(torch.nn.Module):
         self.mul_lr.append(self.feature_fusion_module)
         self.mul_lr.append(self.conv)
 
+    # Add this method inside the BiSeNet class in models/bisenet/build_bisenet.py
+    def optim_parameters(self, base_lr):
+        params_group1 = [] # Backbone parameters (context_path)
+        for param in self.context_path.parameters():
+            if param.requires_grad:
+                params_group1.append(param)
+    
+        params_group2 = [] # BiSeNet specific parts
+        # Ensure self.spatial_path is correctly named (no typo)
+        for module_list_item in [self.spatial_path, 
+                                self.attention_refinement_module1,
+                                self.attention_refinement_module2,
+                                self.supervision1,
+                                self.supervision2,
+                                self.feature_fusion_module,
+                                self.conv]:
+            for param in module_list_item.parameters():
+                if param.requires_grad:
+                    params_group2.append(param)
+    
+        return [
+            {'params': params_group1, 'lr': base_lr},
+            {'params': params_group2, 'lr': base_lr * 10.0} 
+        ]
     def init_weight(self):
         for name, m in self.named_modules():
             if 'context_path' not in name:
@@ -139,7 +163,7 @@ class BiSeNet(torch.nn.Module):
 
     def forward(self, input):
         # output of spatial path
-        sx = self.saptial_path(input)
+        sx = self.spatial_path(input)
 
         # output of context path
         cx1, cx2, tail = self.context_path(input)
