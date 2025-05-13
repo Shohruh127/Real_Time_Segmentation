@@ -118,7 +118,7 @@ class BiSeNet(torch.nn.Module):
         self.init_weight()
 
         self.mul_lr = []
-        self.mul_lr.append(self.saptial_path)
+        self.mul_lr.append(self.spatial_path)
         self.mul_lr.append(self.attention_refinement_module1)
         self.mul_lr.append(self.attention_refinement_module2)
         self.mul_lr.append(self.supervision1)
