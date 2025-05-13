@@ -57,8 +57,9 @@ class resnet101(torch.nn.Module):
 
 
 def build_contextpath(name):
-    model = {
-        'resnet18': resnet18(pretrained=True),
-        'resnet101': resnet101(pretrained=True)
-    }
-    return model[name]
+    if name == 'resnet18':
+        return resnet18(pretrained=True)
+    elif name == 'resnet101':
+        return resnet101(pretrained=True)
+    else:
+        raise ValueError(f"Unsupported context_path name: {name}. Choose 'resnet18' or 'resnet101'.")
