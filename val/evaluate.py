@@ -18,7 +18,8 @@ from models.bisenet.build_bisenet import BiSeNet
 from utils.metrics import ConfusionMatrix 
 
 # --- Default Configurations ---
-DEFAULT_CITYSCAPES_ROOT = "/content/drive/MyDrive/datasets/Cityscapes/Cityscapes/" 
+DEFAULT_CITYSCAPES_ROOT = "/content/data_local/CityscapesDataset/"
+# DEFAULT_CITYSCAPES_ROOT = "/content/drive/MyDrive/datasets/Cityscapes/Cityscapes/" 
 DEFAULT_CHECKPOINT_PATH = None # Will be set by argument
 DEFAULT_MODEL_TYPE = "deeplabv2" # Default to deeplabv2
 
