@@ -88,7 +88,7 @@ def main(args):
     print("Loading GTA5 training dataset...")
     gta_train_dataset = GTA5(root_dir=args.gta5_root, target_size=DEFAULT_GTA5_TRAIN_SIZE)
     if len(gta_train_dataset) == 0: print("ERROR: GTA5 Training dataset loaded 0 samples."); return         
-    gta_train_loader = DataLoader(gta_train_dataset, batch_size=args.gta5_bs, shuffle=True, num_workers=2, pin_memory=True, drop_last=True)
+    gta_train_loader = DataLoader(gta_train_dataset, batch_size=args.gta5_bs, shuffle=True, num_workers=8, pin_memory=True, drop_last=True)
     print(f"GTA5 training dataset loaded with {len(gta_train_dataset)} samples.")
 
     # Cityscapes for Validation
@@ -98,7 +98,7 @@ def main(args):
     city_val_dataset = CityScapes(root_dir=args.cityscapes_root, split='val', 
                                   transform_mode='val', target_size=DEFAULT_CITYSCAPES_EVAL_SIZE)
     if len(city_val_dataset) == 0: print("ERROR: Cityscapes Validation dataset loaded 0 samples."); return
-    city_val_loader = DataLoader(city_val_dataset, batch_size=args.city_val_bs, shuffle=False, num_workers=2, pin_memory=True)
+    city_val_loader = DataLoader(city_val_dataset, batch_size=args.city_val_bs, shuffle=False, num_workers=8, pin_memory=True)
     print(f"Cityscapes validation dataset loaded with {len(city_val_dataset)} samples.")
 
     max_iterations = args.epochs * len(gta_train_loader) 
