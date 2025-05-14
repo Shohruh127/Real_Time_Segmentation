@@ -18,8 +18,8 @@ from utils.lr_scheduler import lr_poly
 from utils.metrics import ConfusionMatrix
 
 # --- Default Configurations ---
-DEFAULT_GTA5_ROOT = "/content/data_local/GTA5Dataset/"
-DEFAULT_CITYSCAPES_ROOT = "/content/data_local/CityscapesDataset/"
+DEFAULT_GTA5_ROOT = "/content/drive/MyDrive/datasets/GTA5/"
+DEFAULT_CITYSCAPES_ROOT = "/content/drive/MyDrive/datasets/Cityscapes/Cityscapes/"
 DEFAULT_CHECKPOINT_DIR = "./checkpoints_bisenet_gta5" 
 DEFAULT_RUN_NAME = "bisenet_gta5_no_aug_run1" # Step 3a is without augmentations
 DEFAULT_NUM_CLASSES = 19
