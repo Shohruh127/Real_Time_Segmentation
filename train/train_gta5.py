@@ -18,9 +18,10 @@ from utils.lr_scheduler import lr_poly
 from utils.metrics import ConfusionMatrix
 
 # --- Default Configurations ---
-DEFAULT_GTA5_ROOT = "/content/data_local/GTA5Dataset/" 
-DEFAULT_CITYSCAPES_ROOT = "/content/data_local/CityscapesDataset/" # For validation
-DEFAULT_CHECKPOINT_DIR = "./checkpoints_bisenet_gta5" 
+# train_gta5.py
+DEFAULT_GTA5_ROOT = "/kaggle/input/datasets/GTA5_Data/" # Example
+DEFAULT_CITYSCAPES_ROOT = "/kaggle/input/datasets/Cityscapes_Data/" # Example for validation
+DEFAULT_CHECKPOINT_DIR = "/kaggle/working/checkpoints_bisenet_gta5" # Output to writable directory 
 DEFAULT_RUN_NAME = "bisenet_gta5_no_aug_run1" # Step 3a is without augmentations
 DEFAULT_NUM_CLASSES = 19
 DEFAULT_IGNORE_INDEX = 255
