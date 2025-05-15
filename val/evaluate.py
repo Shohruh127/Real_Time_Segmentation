@@ -80,7 +80,7 @@ def main(args):
         return
         
     print(f"Loading checkpoint: {args.checkpoint}")
-    checkpoint = torch.load(args.checkpoint, map_location=DEVICE)
+    checkpoint = torch.load(args.checkpoint, map_location=DEVICE, weights_only=False)
     
     state_dict = checkpoint['state_dict']
     new_state_dict = OrderedDict()
