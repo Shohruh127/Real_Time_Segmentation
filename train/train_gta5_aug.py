@@ -18,16 +18,16 @@ from utils.lr_scheduler import lr_poly
 from utils.metrics import ConfusionMatrix
 
 # --- Default Configurations ---
-DEFAULT_GTA5_ROOT = "/kaggle/input/datasetcityscapes/GTA5/GTA5/" # Example Kaggle path
-DEFAULT_CITYSCAPES_ROOT = "/kaggle/input/datasetcityscapes/Cityscapes/Cityscapes/Cityspaces/" # Example Kaggle path
-DEFAULT_CHECKPOINT_DIR = "/kaggle/working/checkpoints_bisenet_gta5_aug" # Separate dir for augmented runs
-DEFAULT_RUN_NAME = "bisenet_gta5_aug_default" # Will be overridden if augs are used
+DEFAULT_GTA5_ROOT = "/kaggle/input/datasetcityscapes/GTA5/GTA5/" 
+DEFAULT_CITYSCAPES_ROOT = "/kaggle/input/datasetcityscapes/Cityscapes/Cityscapes/Cityspaces/" 
+DEFAULT_CHECKPOINT_DIR = "/kaggle/working/checkpoints_bisenet_gta5_aug" 
+DEFAULT_RUN_NAME = "bisenet_gta5_aug_default" 
 DEFAULT_NUM_CLASSES = 19
 DEFAULT_IGNORE_INDEX = 255
 DEFAULT_GTA5_TRAIN_SIZE = (720, 1280) 
 DEFAULT_CITYSCAPES_EVAL_SIZE = (512, 1024) 
 DEFAULT_NUM_EPOCHS = 50 
-DEFAULT_BATCH_SIZE_GTA5 = 4 # Start small for 1280x720, adjust based on GPU
+DEFAULT_BATCH_SIZE_GTA5 = 4 
 DEFAULT_BATCH_SIZE_CITY_VAL = 8 
 DEFAULT_LEARNING_RATE = 2.5e-2 
 DEFAULT_MOMENTUM = 0.9
@@ -59,7 +59,6 @@ def parse_args():
     
     args = parser.parse_args()
 
-    # Dynamically set run_name if not provided by user
     if args.run_name is None:
         active_augs_names = []
         if args.aug_hflip: active_augs_names.append("hflip")
@@ -67,12 +66,12 @@ def parse_args():
         if args.aug_gblur: active_augs_names.append("gblur")
         
         if not active_augs_names:
-            args.run_name = "bisenet_gta5_no_aug_runX" # Suffix X to differentiate from step 3a
+            args.run_name = "bisenet_gta5_no_aug_runX" 
         else:
             args.run_name = f"bisenet_gta5_aug_{'_'.join(active_augs_names)}_p{str(args.aug_prob).replace('.', '')}"
     return args
 
-# --- Helper Function: save_checkpoint (same as before) ---
+# --- Helper Function: save_checkpoint ---
 def save_checkpoint(model, optimizer, epoch, best_miou, run_ckpt_dir, filename="checkpoint.pth.tar"):
     state = {
         'epoch': epoch + 1, 
@@ -87,7 +86,7 @@ def save_checkpoint(model, optimizer, epoch, best_miou, run_ckpt_dir, filename="
 # --- Main Training and Validation Function ---
 def main(args): 
     global BEST_CITYSCAPES_MIOU 
-    BEST_CITYSCAPES_MIOU = 0.0 # Reset for each run
+    BEST_CITYSCAPES_MIOU = 0.0 
 
     print(f"Using device: {DEVICE}")
     print(f"Configuration: {args}")
@@ -123,7 +122,7 @@ def main(args):
     if len(city_val_dataset) == 0: print("ERROR: Cityscapes Validation dataset loaded 0 samples."); return
     city_val_loader = DataLoader(city_val_dataset, batch_size=args.city_val_bs, shuffle=False, num_workers=2, pin_memory=True)
     print(f"Cityscapes validation dataset loaded with {len(city_val_dataset)} samples.")
-
+    
     max_iterations = args.epochs * len(gta_train_loader) 
 
     print("Initializing BiSeNet model (ResNet-18 backbone)...")
@@ -155,7 +154,7 @@ def main(args):
             print(f"=> ERROR: No checkpoint found at '{args.resume}'"); return 
     else:
         print("=> Not resuming, starting from scratch (ResNet-18 backbone is ImageNet pre-trained).")
-
+    
     print(f"Starting training on GTA5 from epoch {start_epoch+1} for {args.epochs} total epochs...")
     start_time = time.time()
 
@@ -181,3 +180,44 @@ def main(args):
             total_loss = loss_main + AUX_LOSS_WEIGHT * loss_aux1 + AUX_LOSS_WEIGHT * loss_aux2
 
             optimizer.zero_grad(); total_loss.backward(); optimizer.step()
+            epoch_train_loss += total_loss.item(); current_iteration += 1 
+            current_lr_display = optimizer.param_groups[0]['lr']
+            train_progress_bar.set_postfix(loss=f"{total_loss.item():.4f}", avg_loss=f"{epoch_train_loss/(i+1):.4f}", lr=f"{current_lr_display:.6f}")
+
+        avg_epoch_train_loss = epoch_train_loss / len(gta_train_loader)
+        print(f"\nEpoch {epoch+1}/{args.epochs} GTA5 Training Completed. Avg Loss: {avg_epoch_train_loss:.4f}")
+
+        model.eval()
+        print(f"Starting validation on Cityscapes for epoch {epoch+1}...")
+        val_conf_mat = ConfusionMatrix(num_classes=DEFAULT_NUM_CLASSES, ignore_label=DEFAULT_IGNORE_INDEX)
+        val_progress_bar = tqdm(city_val_loader, desc=f"Epoch {epoch+1}/{args.epochs} [Cityscapes Val]", unit="batch")
+        with torch.no_grad():
+            for images_val, labels_val in val_progress_bar:
+                images_val = images_val.to(DEVICE)
+                outputs_val = model(images_val) 
+                preds_val = torch.argmax(outputs_val, dim=1)
+                val_conf_mat.update(preds_val.cpu(), labels_val.cpu())
+        current_cityscapes_miou, _ = val_conf_mat.compute_iou()
+        print(f"Epoch {epoch+1} Cityscapes Validation mIoU: {current_cityscapes_miou:.2f}%")
+
+        is_best = current_cityscapes_miou > BEST_CITYSCAPES_MIOU
+        if is_best:
+            BEST_CITYSCAPES_MIOU = current_cityscapes_miou
+            save_checkpoint(model, optimizer, epoch, BEST_CITYSCAPES_MIOU, run_checkpoint_dir, 
+                            filename=f"{args.run_name}_best_on_city.pth.tar") 
+            print(f"  ** New best Cityscapes mIoU: {BEST_CITYSCAPES_MIOU:.2f}%. Best checkpoint saved.")
+        
+        save_checkpoint(model, optimizer, epoch, current_cityscapes_miou, run_checkpoint_dir, 
+                        filename=f"{args.run_name}_epoch_{epoch+1}.pth.tar")
+        save_checkpoint(model, optimizer, epoch, current_cityscapes_miou, run_checkpoint_dir, 
+                        filename=f"{args.run_name}_latest.pth.tar")
+
+    total_training_time = time.time() - start_time
+    print(f"\nGTA5 Training with Augmentations finished in {total_training_time / 3600:.2f} hours.")
+    print(f"Best mIoU on Cityscapes validation: {BEST_CITYSCAPES_MIOU:.2f}%")
+    print(f"Checkpoints saved in {run_checkpoint_dir}")
+
+# --- Script Entry Point ---
+if __name__ == "__main__": # Make sure this block is present
+    cmd_args = parse_args() 
+    main(cmd_args)
