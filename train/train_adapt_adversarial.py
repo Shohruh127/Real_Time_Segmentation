@@ -227,10 +227,12 @@ def main(args):
             optimizer_G.step()
             
             # --- Update LR and Progress Bar ---
-            max_iterations_for_lr = args.epochs * len(source_loader) # Ensure this is defined before use
-            lr_group0 = lr_poly(args.lr_g, current_iteration, max_iterations_for_lr); optimizer.param_groups[0]['lr'] = lr_group0
-            if len(optimizer_G.param_groups) > 1:
-                lr_group1 = lr_poly(args.lr_g * 10.0, current_iteration, max_iterations_for_lr); optimizer_G.param_groups[1]['lr'] = lr_group1
+            # Adjust learning rate for the GENERATOR's optimizer
+            lr_group0 = lr_poly(args.lr_g, current_iteration, max_iterations) 
+            optimizer_G.param_groups[0]['lr'] = lr_group0 # CORRECTED: Use optimizer_G
+                if len(optimizer_G.param_groups) > 1:
+                    lr_group1 = lr_poly(args.lr_g * 10.0, current_iteration, max_iterations) 
+                    optimizer_G.param_groups[1]['lr'] = lr_group1 # CORRECTED: Use optimizer_G
             
             current_iteration += 1
             progress_bar.set_postfix(
