@@ -48,11 +48,11 @@ def parse_args():
     parser.add_argument('--lambda_adv', type=float, default=DEFAULT_LAMBDA_ADV, help='Weight for adversarial loss')
     parser.add_argument('--epochs', type=int, default=DEFAULT_NUM_EPOCHS, help='Total epochs')
     parser.add_argument('--gta5_root', type=str, default=DEFAULT_GTA5_ROOT, help='Path to GTA5 root')
-    parser.add_argument('--cityscapes_root', type=str, default=DEFAULT_CITYSCAPES_ROOT, help='Path to Cityscapes root')
+    parser.add_argument('--cityscapes_root', type=str, default=DEFAULT_CITYSCAPES_ROOT, help='Path to Cityscapes root for UNLABELED target data')
     parser.add_argument('--checkpoint_dir', type=str, default=DEFAULT_CHECKPOINT_DIR, help='Directory to save checkpoints')
     parser.add_argument('--run_name', type=str, default=DEFAULT_RUN_NAME, help='Run name for checkpoints')
     
-    # Augmentation Flags (use best setting from Step 3b)
+    # Use best augmentation setting from Step 3b
     parser.add_argument('--aug_hflip', action='store_true', help='Enable Random Horizontal Flip')
     parser.add_argument('--aug_colorjitter', action='store_true', help='Enable Color Jitter')
     parser.add_argument('--aug_gblur', action='store_true', help='Enable Gaussian Blur')
@@ -62,7 +62,6 @@ def parse_args():
 
 # --- Helper Function: save_checkpoint ---
 def save_checkpoint(generator, discriminator, optimizer_G, optimizer_D, epoch, run_ckpt_dir, filename="checkpoint.pth.tar"):
-    # This saves state for both models and optimizers to allow resuming adversarial training
     state = {
         'epoch': epoch + 1, 
         'generator_state_dict': generator.module.state_dict() if isinstance(generator, nn.DataParallel) else generator.state_dict(),
@@ -129,32 +128,30 @@ def main(args):
     target_label_val = 1
     
     # --- Resume from Checkpoint ---
+    # (Simplified resume logic here, can be expanded if needed)
     if args.resume:
         if os.path.isfile(args.resume):
             print(f"=> Loading checkpoint '{args.resume}'")
             checkpoint = torch.load(args.resume, map_location=DEVICE, weights_only=False)
             
+            # Load Generator
             gen_state_dict = checkpoint['generator_state_dict']
             new_gen_state_dict = OrderedDict()
             for k, v in gen_state_dict.items(): name = k[7:] if k.startswith('module.') else k; new_gen_state_dict[name] = v
-            
-            # Load into base model if DataParallel is used
             if isinstance(generator, nn.DataParallel): generator.module.load_state_dict(new_gen_state_dict)
             else: generator.load_state_dict(new_gen_state_dict)
-            print("=> Loaded Generator state_dict")
 
+            # Load Discriminator
             disc_state_dict = checkpoint['discriminator_state_dict']
             new_disc_state_dict = OrderedDict()
             for k, v in disc_state_dict.items(): name = k[7:] if k.startswith('module.') else k; new_disc_state_dict[name] = v
-
             if isinstance(discriminator, nn.DataParallel): discriminator.module.load_state_dict(new_disc_state_dict)
             else: discriminator.load_state_dict(new_disc_state_dict)
-            print("=> Loaded Discriminator state_dict")
-
-            if 'optimizer_G_state_dict' in checkpoint: optimizer_G.load_state_dict(checkpoint['optimizer_G_state_dict']); print("=> Loaded Optimizer_G state_dict")
-            if 'optimizer_D_state_dict' in checkpoint: optimizer_D.load_state_dict(checkpoint['optimizer_D_state_dict']); print("=> Loaded Optimizer_D state_dict")
-            if 'epoch' in checkpoint: start_epoch = checkpoint['epoch'] 
             
+            # Load Optimizers and Epoch
+            if 'optimizer_G_state_dict' in checkpoint: optimizer_G.load_state_dict(checkpoint['optimizer_G_state_dict'])
+            if 'optimizer_D_state_dict' in checkpoint: optimizer_D.load_state_dict(checkpoint['optimizer_D_state_dict'])
+            if 'epoch' in checkpoint: start_epoch = checkpoint['epoch']
             print(f"=> Resuming from epoch {start_epoch + 1}")
         else:
             print(f"=> ERROR: No checkpoint found at '{args.resume}'"); return 
@@ -179,7 +176,7 @@ def main(args):
             # --- Train Discriminator ---
             optimizer_D.zero_grad()
             
-            # 1. D loss on real (target) data
+            # D loss on real (target) data
             try:
                 target_images, _ = next(target_iter)
             except StopIteration:
@@ -194,7 +191,7 @@ def main(args):
             loss_D_target = criterion_adv(D_out_target, torch.full_like(D_out_target, target_label_val))
             loss_D_target.backward()
 
-            # 2. D loss on fake (source) data
+            # D loss on fake (source) data
             source_images = source_images.to(DEVICE)
             with torch.no_grad():
                 source_preds, _, _ = generator(source_images)
@@ -227,12 +224,9 @@ def main(args):
             optimizer_G.step()
             
             # --- Update LR and Progress Bar ---
-            # Adjust learning rate for the GENERATOR's optimizer
-            lr_group0 = lr_poly(args.lr_g, current_iteration, max_iterations) 
-            optimizer_G.param_groups[0]['lr'] = lr_group0 # CORRECTED: Use optimizer_G
-                if len(optimizer_G.param_groups) > 1:
-                    lr_group1 = lr_poly(args.lr_g * 10.0, current_iteration, max_iterations) 
-                    optimizer_G.param_groups[1]['lr'] = lr_group1 # CORRECTED: Use optimizer_G
+            lr_group0 = lr_poly(args.lr_g, current_iteration, max_iterations); optimizer_G.param_groups[0]['lr'] = lr_group0
+            if len(optimizer_G.param_groups) > 1:
+                lr_group1 = lr_poly(args.lr_g * 10.0, current_iteration, max_iterations); optimizer_G.param_groups[1]['lr'] = lr_group1
             
             current_iteration += 1
             progress_bar.set_postfix(
@@ -244,8 +238,8 @@ def main(args):
         # --- Checkpoint Saving (No per-epoch validation) ---
         epoch_filename = f"{args.run_name}_epoch_{epoch+1}.pth.tar"
         latest_filename = f"{args.run_name}_latest.pth.tar"
-        save_checkpoint(generator, discriminator, optimizer_G, optimizer_D, epoch, -1, run_checkpoint_dir, filename=epoch_filename)
-        save_checkpoint(generator, discriminator, optimizer_G, optimizer_D, epoch, -1, run_checkpoint_dir, filename=latest_filename)
+        save_checkpoint(generator, discriminator, optimizer_G, optimizer_D, epoch, run_checkpoint_dir, filename=epoch_filename)
+        save_checkpoint(generator, discriminator, optimizer_G, optimizer_D, epoch, run_checkpoint_dir, filename=latest_filename)
         print(f"\nEpoch {epoch+1} training completed. Checkpoint saved.")
 
     total_training_time = time.time() - start_time
