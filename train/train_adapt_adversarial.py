@@ -94,9 +94,9 @@ def main(args):
     gta_train_dataset = GTA5(root_dir=args.gta5_root, target_size=DEFAULT_GTA5_TRAIN_SIZE,
                              use_horizontal_flip=args.aug_hflip, use_color_jitter=args.aug_colorjitter,
                              use_gaussian_blur=args.aug_gblur)
-    source_loader = DataLoader(gta_train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, pin_memory=True, drop_last=True)
+    source_loader = DataLoader(gta_train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=True)
     cityscapes_target_dataset = CityScapes(root_dir=args.cityscapes_root, split='train', target_size=DEFAULT_CITYSCAPES_TRAIN_SIZE)
-    target_loader = DataLoader(cityscapes_target_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, pin_memory=True, drop_last=True)
+    target_loader = DataLoader(cityscapes_target_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=True)
 
     # --- Optimizers ---
     # --- THIS IS THE KEY CHANGE ---
